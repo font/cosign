@@ -24,6 +24,7 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/peterbourgon/ff/v3/ffcli"
+	"github.com/pkg/errors"
 	"github.com/sigstore/cosign/pkg/cosign"
 )
 
@@ -43,15 +44,16 @@ func Verify() *ffcli.Command {
 		FlagSet:    flagset,
 		Exec: func(ctx context.Context, args []string) error {
 			if *key == "" {
-				return flag.ErrHelp
+				return errors.New("key argument is empty")
 			}
 			if len(args) != 1 {
-				return flag.ErrHelp
+				flagset.Usage()
+				return errors.New("invalid number of arguments")
 			}
 
 			pubKey, err := cosign.LoadPublicKey(*key)
 			if err != nil {
-				return flag.ErrHelp
+				return errors.Wrapf(err, "Unable to load public key")
 			}
 
 			co := cosign.CheckOpts{
