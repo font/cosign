@@ -36,6 +36,7 @@ type VerifyCommand struct {
 	KmsVal      string
 	Key         string
 	Output      string
+	OutputFile  string
 	Annotations *map[string]interface{}
 }
 
@@ -49,6 +50,7 @@ func Verify() *ffcli.Command {
 	flagset.StringVar(&cmd.KmsVal, "kms", "", "verify via a public key stored in a KMS")
 	flagset.BoolVar(&cmd.CheckClaims, "check-claims", true, "whether to check the claims found")
 	flagset.StringVar(&cmd.Output, "output", "json", "output the signing image information. Default JSON.")
+	flagset.StringVar(&cmd.OutputFile, "output-file", "", "output the results to a file.")
 
 	// parse annotations
 	flagset.Var(&annotations, "a", "extra key=value pairs to sign")
@@ -109,6 +111,16 @@ func (c *VerifyCommand) Exec(ctx context.Context, args []string) error {
 		co.PubKey = pubKey
 	}
 
+	outputFile := os.Stdout
+	if c.OutputFile != "" {
+		var err error
+		outputFile, err = os.Create(c.OutputFile)
+		if err != nil {
+			return errors.Wrapf(err, "Error creating output file %s", c.OutputFile)
+		}
+		defer outputFile.Close()
+	}
+
 	for _, imageRef := range args {
 		ref, err := name.ParseReference(imageRef)
 		if err != nil {
@@ -120,39 +132,39 @@ func (c *VerifyCommand) Exec(ctx context.Context, args []string) error {
 			return err
 		}
 
-		c.printVerification(imageRef, verified, co)
+		c.printVerification(outputFile, imageRef, verified, co)
 	}
 
 	return nil
 }
 
 // printVerification logs details about the verification to stdout
-func (c *VerifyCommand) printVerification(imgRef string, verified []cosign.SignedPayload, co cosign.CheckOpts) {
-	fmt.Fprintf(os.Stderr, "\nVerification for %s --\n", imgRef)
-	fmt.Fprintln(os.Stderr, "The following checks were performed on each of these signatures:")
+func (c *VerifyCommand) printVerification(file *os.File, imgRef string, verified []cosign.SignedPayload, co cosign.CheckOpts) {
+	fmt.Fprintf(file, "\nVerification for %s --\n", imgRef)
+	fmt.Fprintln(file, "The following checks were performed on each of these signatures:")
 	if co.Claims {
 		if co.Annotations != nil {
-			fmt.Fprintln(os.Stderr, "  - The specified annotations were verified.")
+			fmt.Fprintln(file, "  - The specified annotations were verified.")
 		}
-		fmt.Fprintln(os.Stderr, "  - The cosign claims were validated")
+		fmt.Fprintln(file, "  - The cosign claims were validated")
 	}
 	if co.Tlog {
-		fmt.Fprintln(os.Stderr, "  - The claims were present in the transparency log")
-		fmt.Fprintln(os.Stderr, "  - The signatures were integrated into the transparency log when the certificate was valid")
+		fmt.Fprintln(file, "  - The claims were present in the transparency log")
+		fmt.Fprintln(file, "  - The signatures were integrated into the transparency log when the certificate was valid")
 	}
 	if co.PubKey != nil {
-		fmt.Fprintln(os.Stderr, "  - The signatures were verified against the specified public key")
+		fmt.Fprintln(file, "  - The signatures were verified against the specified public key")
 	}
-	fmt.Fprintln(os.Stderr, "  - Any certificates were verified against the Fulcio roots.")
+	fmt.Fprintln(file, "  - Any certificates were verified against the Fulcio roots.")
 
 	switch c.Output {
 	case "text":
 		for _, vp := range verified {
 			if vp.Cert != nil {
-				fmt.Println("Certificate common name: ", vp.Cert.Subject.CommonName)
+				fmt.Fprintln(file, "Certificate common name: ", vp.Cert.Subject.CommonName)
 			}
 
-			fmt.Println(string(vp.Payload))
+			fmt.Fprintln(file, string(vp.Payload))
 		}
 	default:
 		var outputKeys []payload.Simple
@@ -160,7 +172,7 @@ func (c *VerifyCommand) printVerification(imgRef string, verified []cosign.Signe
 			ss := payload.Simple{}
 			err := json.Unmarshal(vp.Payload, &ss)
 			if err != nil {
-				fmt.Println("error decoding the payload:", err.Error())
+				fmt.Fprintln(file, "error decoding the payload:", err.Error())
 				return
 			}
 
@@ -176,10 +188,10 @@ func (c *VerifyCommand) printVerification(imgRef string, verified []cosign.Signe
 
 		b, err := json.Marshal(outputKeys)
 		if err != nil {
-			fmt.Println("error when generating the output:", err.Error())
+			fmt.Fprintln(file, "error when generating the output:", err.Error())
 			return
 		}
 
-		fmt.Printf("\n%s\n", string(b))
+		fmt.Fprintf(file, "\n%s\n", string(b))
 	}
 }
