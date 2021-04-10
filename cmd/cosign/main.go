@@ -22,13 +22,16 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/logs"
 	"github.com/peterbourgon/ff/v3/ffcli"
+	"github.com/pkg/errors"
+
 	"github.com/sigstore/cosign/cmd/cosign/cli"
 )
 
 var (
-	rootFlagSet = flag.NewFlagSet("cosign", flag.ExitOnError)
-	debug       = rootFlagSet.Bool("d", false, "log debug output to stderr")
-	verbose     = rootFlagSet.Bool("v", false, "increase log verbosity")
+	rootFlagSet    = flag.NewFlagSet("cosign", flag.ExitOnError)
+	debug          = rootFlagSet.Bool("d", false, "log debug output")
+	verbose        = rootFlagSet.Bool("v", false, "increase log verbosity")
+	outputFilename = rootFlagSet.String("output-file", "", "log output to a file. Default Stdout.")
 )
 
 func main() {
@@ -50,15 +53,28 @@ func main() {
 		os.Exit(1)
 	}
 
+	out := os.Stdout
+	if *outputFilename != "" {
+		var err error
+		out, err = os.Create(*outputFilename)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", errors.Wrapf(err, "Error creating output file %s", outputFilename))
+			os.Exit(1)
+		}
+		defer out.Close()
+	}
+
+	cli.SetOutput(out)
+
 	if *debug {
-		logs.Debug.SetOutput(os.Stderr)
+		logs.Debug.SetOutput(cli.OutputErr())
 	}
 
 	if err := root.Run(context.Background()); err != nil {
 		if *verbose {
-			fmt.Print("verbose!")
+			fmt.Fprintf(cli.Output(), "verbose!")
 		}
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		fmt.Fprintf(cli.OutputErr(), "error: %v\n", err)
 		os.Exit(1)
 	}
 }

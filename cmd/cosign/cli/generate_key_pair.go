@@ -18,6 +18,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 
@@ -58,12 +59,12 @@ CAVEATS:
   the COSIGN_PASSWORD environment variable to provide one.`,
 		FlagSet: flagset,
 		Exec: func(ctx context.Context, args []string) error {
-			return GenerateKeyPairCmd(ctx, *kmsVal)
+			return GenerateKeyPairCmd(ctx, Output(), *kmsVal)
 		},
 	}
 }
 
-func GenerateKeyPairCmd(ctx context.Context, kmsVal string) error {
+func GenerateKeyPairCmd(ctx context.Context, w io.Writer, kmsVal string) error {
 	if kmsVal != "" {
 		k, err := kms.Get(ctx, kmsVal)
 		if err != nil {
@@ -80,7 +81,7 @@ func GenerateKeyPairCmd(ctx context.Context, kmsVal string) error {
 		if err := ioutil.WriteFile("cosign.pub", pemBytes, 0600); err != nil {
 			return err
 		}
-		fmt.Fprintln(os.Stderr, "Public key written to cosign.pub")
+		fmt.Fprintln(w, "Public key written to cosign.pub")
 		return nil
 	}
 
@@ -92,29 +93,29 @@ func GenerateKeyPairCmd(ctx context.Context, kmsVal string) error {
 	if err := ioutil.WriteFile("cosign.key", keys.PrivateBytes, 0600); err != nil {
 		return err
 	}
-	fmt.Fprintln(os.Stderr, "Private key written to cosign.key")
+	fmt.Fprintln(w, "Private key written to cosign.key")
 
 	if err := ioutil.WriteFile("cosign.pub", keys.PublicBytes, 0600); err != nil {
 		return err
 	}
-	fmt.Fprintln(os.Stderr, "Public key written to cosign.pub")
+	fmt.Fprintln(w, "Public key written to cosign.pub")
 	return nil
 }
 
 func GetPass(confirm bool) ([]byte, error) {
 	read := Read()
-	fmt.Fprint(os.Stderr, "Enter password for private key: ")
+	fmt.Fprint(Output(), "Enter password for private key: ")
 	pw1, err := read()
-	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(Output())
 	if err != nil {
 		return nil, err
 	}
 	if !confirm {
 		return pw1, nil
 	}
-	fmt.Fprint(os.Stderr, "Enter again: ")
+	fmt.Fprint(Output(), "Enter again: ")
 	pw2, err := read()
-	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(Output())
 	if err != nil {
 		return nil, err
 	}

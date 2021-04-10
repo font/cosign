@@ -19,7 +19,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"os"
+	"io"
 
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -36,7 +36,6 @@ type VerifyCommand struct {
 	KmsVal      string
 	Key         string
 	Output      string
-	OutputFile  string
 	Annotations *map[string]interface{}
 }
 
@@ -50,7 +49,6 @@ func Verify() *ffcli.Command {
 	flagset.StringVar(&cmd.KmsVal, "kms", "", "verify via a public key stored in a KMS")
 	flagset.BoolVar(&cmd.CheckClaims, "check-claims", true, "whether to check the claims found")
 	flagset.StringVar(&cmd.Output, "output", "json", "output the signing image information. Default JSON.")
-	flagset.StringVar(&cmd.OutputFile, "output-file", "", "output the results to a file.")
 
 	// parse annotations
 	flagset.Var(&annotations, "a", "extra key=value pairs to sign")
@@ -111,16 +109,6 @@ func (c *VerifyCommand) Exec(ctx context.Context, args []string) error {
 		co.PubKey = pubKey
 	}
 
-	outputFile := os.Stdout
-	if c.OutputFile != "" {
-		var err error
-		outputFile, err = os.Create(c.OutputFile)
-		if err != nil {
-			return errors.Wrapf(err, "Error creating output file %s", c.OutputFile)
-		}
-		defer outputFile.Close()
-	}
-
 	for _, imageRef := range args {
 		ref, err := name.ParseReference(imageRef)
 		if err != nil {
@@ -132,39 +120,39 @@ func (c *VerifyCommand) Exec(ctx context.Context, args []string) error {
 			return err
 		}
 
-		c.printVerification(outputFile, imageRef, verified, co)
+		c.printVerification(Output(), imageRef, verified, co)
 	}
 
 	return nil
 }
 
 // printVerification logs details about the verification to stdout
-func (c *VerifyCommand) printVerification(file *os.File, imgRef string, verified []cosign.SignedPayload, co cosign.CheckOpts) {
-	fmt.Fprintf(file, "\nVerification for %s --\n", imgRef)
-	fmt.Fprintln(file, "The following checks were performed on each of these signatures:")
+func (c *VerifyCommand) printVerification(w io.Writer, imgRef string, verified []cosign.SignedPayload, co cosign.CheckOpts) {
+	fmt.Fprintf(w, "\nVerification for %s --\n", imgRef)
+	fmt.Fprintln(w, "The following checks were performed on each of these signatures:")
 	if co.Claims {
 		if co.Annotations != nil {
-			fmt.Fprintln(file, "  - The specified annotations were verified.")
+			fmt.Fprintln(w, "  - The specified annotations were verified.")
 		}
-		fmt.Fprintln(file, "  - The cosign claims were validated")
+		fmt.Fprintln(w, "  - The cosign claims were validated")
 	}
 	if co.Tlog {
-		fmt.Fprintln(file, "  - The claims were present in the transparency log")
-		fmt.Fprintln(file, "  - The signatures were integrated into the transparency log when the certificate was valid")
+		fmt.Fprintln(w, "  - The claims were present in the transparency log")
+		fmt.Fprintln(w, "  - The signatures were integrated into the transparency log when the certificate was valid")
 	}
 	if co.PubKey != nil {
-		fmt.Fprintln(file, "  - The signatures were verified against the specified public key")
+		fmt.Fprintln(w, "  - The signatures were verified against the specified public key")
 	}
-	fmt.Fprintln(file, "  - Any certificates were verified against the Fulcio roots.")
+	fmt.Fprintln(w, "  - Any certificates were verified against the Fulcio roots.")
 
 	switch c.Output {
 	case "text":
 		for _, vp := range verified {
 			if vp.Cert != nil {
-				fmt.Fprintln(file, "Certificate common name: ", vp.Cert.Subject.CommonName)
+				fmt.Fprintln(w, "Certificate common name: ", vp.Cert.Subject.CommonName)
 			}
 
-			fmt.Fprintln(file, string(vp.Payload))
+			fmt.Fprintln(w, string(vp.Payload))
 		}
 	default:
 		var outputKeys []payload.Simple
@@ -172,7 +160,7 @@ func (c *VerifyCommand) printVerification(file *os.File, imgRef string, verified
 			ss := payload.Simple{}
 			err := json.Unmarshal(vp.Payload, &ss)
 			if err != nil {
-				fmt.Fprintln(file, "error decoding the payload:", err.Error())
+				fmt.Fprintln(w, "error decoding the payload:", err.Error())
 				return
 			}
 
@@ -188,10 +176,10 @@ func (c *VerifyCommand) printVerification(file *os.File, imgRef string, verified
 
 		b, err := json.Marshal(outputKeys)
 		if err != nil {
-			fmt.Fprintln(file, "error when generating the output:", err.Error())
+			fmt.Fprintln(w, "error when generating the output:", err.Error())
 			return
 		}
 
-		fmt.Fprintf(file, "\n%s\n", string(b))
+		fmt.Fprintf(w, "\n%s\n", string(b))
 	}
 }

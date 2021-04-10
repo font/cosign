@@ -19,6 +19,7 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -66,7 +67,7 @@ EXAMPLES
 				return flag.ErrHelp
 			}
 			for _, blob := range args {
-				if _, err := SignBlobCmd(ctx, *key, *kmsVal, blob, *b64, GetPass); err != nil {
+				if _, err := SignBlobCmd(ctx, Output(), *key, *kmsVal, blob, *b64, GetPass); err != nil {
 					return errors.Wrapf(err, "signing %s", blob)
 				}
 			}
@@ -75,13 +76,13 @@ EXAMPLES
 	}
 }
 
-func SignBlobCmd(ctx context.Context, keyPath, kmsVal, payloadPath string, b64 bool, pf cosign.PassFunc) ([]byte, error) {
+func SignBlobCmd(ctx context.Context, w io.Writer, keyPath, kmsVal, payloadPath string, b64 bool, pf cosign.PassFunc) ([]byte, error) {
 	var payload []byte
 	var err error
 	if payloadPath == "-" {
 		payload, err = ioutil.ReadAll(os.Stdin)
 	} else {
-		fmt.Fprintln(os.Stderr, "Using payload from:", payloadPath)
+		fmt.Fprintln(w, "Using payload from:", payloadPath)
 		payload, err = ioutil.ReadFile(filepath.Clean(payloadPath))
 	}
 	if err != nil {
@@ -119,22 +120,22 @@ func SignBlobCmd(ctx context.Context, keyPath, kmsVal, payloadPath string, b64 b
 			return nil, errors.Wrap(err, "getting public key")
 		}
 	default: // Keyless!
-		fmt.Fprintln(os.Stderr, "Generating ephemeral keys...")
+		fmt.Fprintln(w, "Generating ephemeral keys...")
 		priv, err := cosign.GeneratePrivateKey()
 		if err != nil {
 			return nil, errors.Wrap(err, "generating cert")
 		}
-		fmt.Fprintln(os.Stderr, "Retrieving signed certificate...")
+		fmt.Fprintln(w, "Retrieving signed certificate...")
 		flow := fulcio.FlowNormal
 		if !term.IsTerminal(0) {
-			fmt.Fprintln(os.Stderr, "Non-interactive mode detected, using device flow.")
+			fmt.Fprintln(w, "Non-interactive mode detected, using device flow.")
 			flow = fulcio.FlowDevice
 		}
 		pemBytes, _, err := fulcio.GetCert(ctx, priv, flow) // TODO: use the chain
 		if err != nil {
 			return nil, errors.Wrap(err, "retrieving cert")
 		}
-		fmt.Fprintf(os.Stderr, "Signing with certificate:\n%s\n", string(pemBytes))
+		fmt.Fprintf(w, "Signing with certificate:\n%s\n", string(pemBytes))
 	}
 
 	if cosign.Experimental() {
@@ -142,14 +143,14 @@ func SignBlobCmd(ctx context.Context, keyPath, kmsVal, payloadPath string, b64 b
 		if err != nil {
 			return nil, err
 		}
-		fmt.Println("tlog entry created with index: ", index)
+		fmt.Fprintln(w, "tlog entry created with index: ", index)
 		return signature, nil
 	}
 
 	if b64 {
 		signature = []byte(base64.StdEncoding.EncodeToString(signature))
-		fmt.Println(string(signature))
-	} else if _, err := os.Stdout.Write(signature); err != nil {
+		fmt.Fprintln(w, string(signature))
+	} else if _, err := fmt.Fprint(w, signature); err != nil {
 		// No newline if using the raw signature
 		return nil, err
 	}

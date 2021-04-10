@@ -23,6 +23,7 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -72,7 +73,7 @@ EXAMPLES
 			if len(args) != 1 {
 				return flag.ErrHelp
 			}
-			if err := VerifyBlobCmd(ctx, *key, *kmsVal, *cert, *signature, args[0]); err != nil {
+			if err := VerifyBlobCmd(ctx, Output(), *key, *kmsVal, *cert, *signature, args[0]); err != nil {
 				return errors.Wrapf(err, "verifying blob %s", args)
 			}
 			return nil
@@ -85,7 +86,7 @@ func isb64(data []byte) bool {
 	return err == nil
 }
 
-func VerifyBlobCmd(ctx context.Context, keyRef, kmsVal, certRef, sigRef, blobRef string) error {
+func VerifyBlobCmd(ctx context.Context, w io.Writer, keyRef, kmsVal, certRef, sigRef, blobRef string) error {
 	var pubKey cosign.PublicKey
 	var err error
 	var cert *x509.Certificate
@@ -166,10 +167,10 @@ func VerifyBlobCmd(ctx context.Context, keyRef, kmsVal, certRef, sigRef, blobRef
 		if err := cosign.TrustedCert(cert, fulcio.Roots); err != nil {
 			return err
 		}
-		fmt.Fprintln(os.Stderr, "Certificate is trusted by Fulcio Root CA")
-		fmt.Fprintln(os.Stderr, "Email:", cert.Subject.CommonName)
+		fmt.Fprintln(w, "Certificate is trusted by Fulcio Root CA")
+		fmt.Fprintln(w, "Email:", cert.Subject.CommonName)
 	}
-	fmt.Fprintln(os.Stderr, "Verified OK")
+	fmt.Fprintln(w, "Verified OK")
 
 	if cosign.Experimental() {
 		rekorClient, err := app.GetRekorClient(cosign.TlogServer())
@@ -190,7 +191,7 @@ func VerifyBlobCmd(ctx context.Context, keyRef, kmsVal, certRef, sigRef, blobRef
 		if err != nil {
 			return err
 		}
-		fmt.Fprintln(os.Stderr, "tlog entry verified with index: ", index)
+		fmt.Fprintln(w, "tlog entry verified with index: ", index)
 		return nil
 	}
 

@@ -58,7 +58,7 @@ func DownloadCmd(ctx context.Context, imageRef string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println(string(b))
+		fmt.Fprintln(Output(), string(b))
 	}
 	return nil
 }

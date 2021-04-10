@@ -18,8 +18,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
-	"os"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -57,12 +55,12 @@ EXAMPLES
 			if len(args) != 1 {
 				return flag.ErrHelp
 			}
-			return GenerateCmd(ctx, args[0], annotations.annotations, os.Stdout)
+			return GenerateCmd(ctx, args[0], annotations.annotations)
 		},
 	}
 }
 
-func GenerateCmd(_ context.Context, imageRef string, annotations map[string]interface{}, w io.Writer) error {
+func GenerateCmd(_ context.Context, imageRef string, annotations map[string]interface{}) error {
 	ref, err := name.ParseReference(imageRef)
 	if err != nil {
 		return err
@@ -79,6 +77,6 @@ func GenerateCmd(_ context.Context, imageRef string, annotations map[string]inte
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(w, string(payload))
+	fmt.Fprintln(Output(), string(payload))
 	return nil
 }
