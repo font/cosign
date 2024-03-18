@@ -46,7 +46,7 @@ jobs:
       KO_DOCKER_REPO: registry.local:5000/policy-controller
 
     steps:
-    - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+    - uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633 # v4.1.2
     - uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
       with:
         go-version: '1.21'
@@ -57,7 +57,7 @@ jobs:
     - uses: imranismail/setup-kustomize@a76db1c6419124d51470b1e388c4b29476f495f1 # v1.6.1
 
     - name: Install yq
-      uses: mikefarah/yq@047694546cad8f9eaac1627bbc8bcc502fdd88bf # v4.41.1
+      uses: mikefarah/yq@9adde1ac14bb283b8955d2b0d567bcaf3c69e639 # v4.42.1
 
     - name: Install Cosign
       run: |
